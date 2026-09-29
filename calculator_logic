@@ -1,0 +1,103 @@
+"""
+calculator_logic.py
+
+All the maths for the calculator lives here. Nothing in this file
+knows about the GUI, which makes it easy to test on its own.
+"""
+
+import ast
+import math
+import operator
+
+
+class CalculatorError(Exception):
+    """Raised when the user's input cannot be calculated."""
+
+
+# The only operators we allow inside an expression.
+BINARY_OPERATORS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+}
+
+UNARY_OPERATORS = {
+    ast.UAdd: operator.pos,
+    ast.USub: operator.neg,
+}
+
+
+def _evaluate_node(node):
+    """Walk the parsed expression tree and work out its value."""
+    if isinstance(node, ast.Expression):
+        return _evaluate_node(node.body)
+
+    # A plain number such as 5 or 3.14
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+            return node.value
+        raise CalculatorError("Invalid input")
+
+    # Something like 4 + 5
+    if isinstance(node, ast.BinOp) and type(node.op) in BINARY_OPERATORS:
+        left = _evaluate_node(node.left)
+        right = _evaluate_node(node.right)
+        return BINARY_OPERATORS[type(node.op)](left, right)
+
+    # Something like -5
+    if isinstance(node, ast.UnaryOp) and type(node.op) in UNARY_OPERATORS:
+        return UNARY_OPERATORS[type(node.op)](_evaluate_node(node.operand))
+
+    raise CalculatorError("Invalid input")
+
+
+def clean_number(value):
+    """Round away tiny float errors and drop a useless '.0'."""
+    if isinstance(value, float):
+        value = round(value, 10)
+        if value.is_integer():
+            return int(value)
+    return value
+
+
+def evaluate_expression(expression):
+    """
+    Calculate an expression typed on the display, e.g. '2+3*4'.
+
+    A '%' is treated as 'divide by 100', so '50%' becomes 0.5.
+    Raises ZeroDivisionError or CalculatorError on bad input.
+    """
+    expression = expression.strip().replace("%", "/100")
+
+    if not expression:
+        raise CalculatorError("Invalid input")
+
+    try:
+        tree = ast.parse(expression, mode="eval")
+    except SyntaxError:
+        raise CalculatorError("Invalid input")
+
+    return clean_number(_evaluate_node(tree))
+
+
+def _to_number(text):
+    """Convert display text to a float, or raise CalculatorError."""
+    try:
+        return float(text)
+    except ValueError:
+        raise CalculatorError("Invalid input")
+
+
+def square_root(text):
+    """Square root of the number on the display."""
+    number = _to_number(text)
+    if number < 0:
+        raise CalculatorError("Invalid input")
+    return clean_number(math.sqrt(number))
+
+
+def square(text):
+    """Square of the number on the display."""
+    number = _to_number(text)
+    return clean_number(number ** 2)
